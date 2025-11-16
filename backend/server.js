@@ -44,42 +44,20 @@ if (USE_PERSISTENT_PROFILE) {
     console.log(`[Persistent Profile] Using Chrome profile at: ${resolvedPersistentDir}`);
 }
 
-// Get Chrome executable path
+import { chromium } from "playwright";
+
+// Always use Playwright Chromium on Render
 const getChromeExecutablePath = () => {
-    // Try environment variable first (for Render/cloud deployments)
-    if (process.env.CHROME_EXECUTABLE_PATH) {
-        const envPath = process.env.CHROME_EXECUTABLE_PATH;
-        if (fs.existsSync(envPath)) {
-            console.log('Using Chrome from CHROME_EXECUTABLE_PATH environment variable');
-            return envPath;
-        }
+    try {
+        const pwPath = chromium.executablePath();
+        console.log("Using Playwright Chromium:", pwPath);
+        return pwPath;
+    } catch (err) {
+        console.log("Failed to get Playwright Chromium path:", err.message);
+        return null;
     }
-    
-    // Try common system paths
-    const commonPaths = [
-        '/usr/bin/google-chrome',
-        '/usr/bin/chromium',
-        '/usr/bin/chromium-browser',
-        '/usr/bin/google-chrome-stable',
-        '/snap/bin/chromium',
-        '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-        'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-        'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
-        process.env.CHROME_PATH, // Additional env var option
-        process.env.GOOGLE_CHROME_SHIM // Some platforms use this
-    ].filter(Boolean); // Remove undefined values
-    
-    for (const chromePath of commonPaths) {
-        if (chromePath && fs.existsSync(chromePath)) {
-            console.log(`Using Chrome from system path: ${chromePath}`);
-            return chromePath;
-        }
-    }
-    
-    // If nothing found, return null and let puppeteer-core handle it
-    console.log('⚠ No Chrome executable found, puppeteer-core will try to find it automatically');
-    return null;
 };
+
 
 const app = express();
 
