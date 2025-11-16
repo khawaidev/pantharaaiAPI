@@ -2,10 +2,10 @@
   "name": "panthara-backend",
   "version": "1.0.0",
   "type": "module",
-  "main": "server.js",
+  "main": "server-session.js",
   "scripts": {
     "start": "node server-session.js",
-    "postinstall": "playwright install chromium"
+    "postinstall": "PLAYWRIGHT_BROWSERS_PATH=0 playwright install chromium"
   },
   "dependencies": {
     "express": "^4.18.2",
