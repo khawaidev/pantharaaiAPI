@@ -1,6 +1,5 @@
 
 
-
 // server-session.js - Use saved session to send messages
 import bodyParser from 'body-parser';
 import crypto from 'crypto';
@@ -8,9 +7,12 @@ import express from 'express';
 import fs from 'fs';
 import os from 'os';
 import path, { dirname } from 'path';
-import puppeteer from 'puppeteer-extra';
+import puppeteerExtra from 'puppeteer-extra';
 import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import { fileURLToPath } from 'url';
+
+// Use puppeteer-extra (it will automatically use puppeteer-core since puppeteer is not installed)
+const puppeteer = puppeteerExtra;
 
 // Use enhanced stealth plugin
 const stealthPlugin = StealthPlugin();
@@ -39,6 +41,43 @@ if (USE_PERSISTENT_PROFILE) {
     fs.mkdirSync(resolvedPersistentDir, { recursive: true });
     console.log(`[Persistent Profile] Using Chrome profile at: ${resolvedPersistentDir}`);
 }
+
+// Get Chrome executable path
+const getChromeExecutablePath = () => {
+    // Try environment variable first (for Render/cloud deployments)
+    if (process.env.CHROME_EXECUTABLE_PATH) {
+        const envPath = process.env.CHROME_EXECUTABLE_PATH;
+        if (fs.existsSync(envPath)) {
+            console.log('Using Chrome from CHROME_EXECUTABLE_PATH environment variable');
+            return envPath;
+        }
+    }
+    
+    // Try common system paths
+    const commonPaths = [
+        '/usr/bin/google-chrome',
+        '/usr/bin/chromium',
+        '/usr/bin/chromium-browser',
+        '/usr/bin/google-chrome-stable',
+        '/snap/bin/chromium',
+        '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+        'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+        'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+        process.env.CHROME_PATH, // Additional env var option
+        process.env.GOOGLE_CHROME_SHIM // Some platforms use this
+    ].filter(Boolean); // Remove undefined values
+    
+    for (const chromePath of commonPaths) {
+        if (chromePath && fs.existsSync(chromePath)) {
+            console.log(`Using Chrome from system path: ${chromePath}`);
+            return chromePath;
+        }
+    }
+    
+    // If nothing found, return null and let puppeteer-core handle it
+    console.log('⚠ No Chrome executable found, puppeteer-core will try to find it automatically');
+    return null;
+};
 
 const app = express();
 
@@ -668,49 +707,56 @@ const initializeBrowser = async () => {
         try {
             console.log('Initializing browser and loading page...');
             
+            // Get Chrome executable path
+            const executablePath = getChromeExecutablePath();
+            
+            // Base args for Chrome/Chromium
+            const baseArgs = [
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-blink-features=AutomationControlled',
+                '--window-size=1280,900',
+                '--disable-web-security',
+                '--disable-features=IsolateOrigins,site-per-process',
+                '--disable-dev-shm-usage',
+                '--disable-accelerated-2d-canvas',
+                '--no-first-run',
+                '--no-zygote',
+                '--disable-gpu',
+                '--lang=en-US,en',
+                '--disable-infobars',
+                '--disable-notifications',
+                '--disable-popup-blocking',
+                '--disable-translate',
+                '--disable-background-timer-throttling',
+                '--disable-backgrounding-occluded-windows',
+                '--disable-renderer-backgrounding',
+                '--disable-features=TranslateUI',
+                '--disable-ipc-flooding-protection',
+                '--enable-features=NetworkService,NetworkServiceInProcess',
+                '--force-color-profile=srgb',
+                '--metrics-recording-only',
+                '--use-mock-keychain',
+                '--hide-scrollbars',
+                '--mute-audio',
+                '--no-default-browser-check',
+                '--no-pings',
+                '--password-store=basic',
+                '--use-gl=swiftshader',
+                '--disable-extensions-except',
+                '--disable-extensions',
+                '--disable-plugins-discovery',
+                '--disable-preconnect',
+                '--disable-sync',
+                '--disable-background-networking',
+                '--disable-default-apps',
+                '--disable-component-extensions-with-background-pages'
+            ];
+            
             const launchOptions = {
                 headless: false,
-                args: [
-                    '--no-sandbox',
-                    '--disable-setuid-sandbox',
-                    '--disable-blink-features=AutomationControlled',
-                    '--window-size=1280,900',
-                    '--disable-web-security',
-                    '--disable-features=IsolateOrigins,site-per-process',
-                    '--disable-dev-shm-usage',
-                    '--disable-accelerated-2d-canvas',
-                    '--no-first-run',
-                    '--no-zygote',
-                    '--disable-gpu',
-                    '--lang=en-US,en',
-                    '--disable-infobars',
-                    '--disable-notifications',
-                    '--disable-popup-blocking',
-                    '--disable-translate',
-                    '--disable-background-timer-throttling',
-                    '--disable-backgrounding-occluded-windows',
-                    '--disable-renderer-backgrounding',
-                    '--disable-features=TranslateUI',
-                    '--disable-ipc-flooding-protection',
-                    '--enable-features=NetworkService,NetworkServiceInProcess',
-                    '--force-color-profile=srgb',
-                    '--metrics-recording-only',
-                    '--use-mock-keychain',
-                    '--hide-scrollbars',
-                    '--mute-audio',
-                    '--no-default-browser-check',
-                    '--no-pings',
-                    '--password-store=basic',
-                    '--use-gl=swiftshader',
-                    '--disable-extensions-except',
-                    '--disable-extensions',
-                    '--disable-plugins-discovery',
-                    '--disable-preconnect',
-                    '--disable-sync',
-                    '--disable-background-networking',
-                    '--disable-default-apps',
-                    '--disable-component-extensions-with-background-pages'
-                ],
+                executablePath: executablePath || undefined, // Only set if found
+                args: baseArgs,
                 ignoreHTTPSErrors: true,
                 ignoreDefaultArgs: ['--enable-automation', '--enable-blink-features=IdleDetection'],
                 protocolTimeout: 180000,
