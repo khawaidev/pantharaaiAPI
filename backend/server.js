@@ -761,14 +761,27 @@ const initializeBrowser = async () => {
             ];
             
             const launchOptions = {
-                headless: false,
-                executablePath: executablePath || undefined, // Only set if found
-                args: baseArgs,
-                ignoreHTTPSErrors: true,
-                ignoreDefaultArgs: ['--enable-automation', '--enable-blink-features=IdleDetection'],
-                protocolTimeout: 180000,
-                defaultViewport: null
-            };
+    headless: true, // REQUIRED ON RENDER
+    executablePath: executablePath || undefined,
+    args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-gpu',
+        '--disable-dev-shm-usage',
+        '--disable-accelerated-2d-canvas',
+        '--no-first-run',
+        '--no-zygote',
+        '--single-process',
+        '--disable-infobars',
+        '--disable-notifications',
+        '--window-size=1280,900',
+        '--disable-web-security'
+    ],
+    ignoreHTTPSErrors: true,
+    ignoreDefaultArgs: ['--enable-automation'],
+    protocolTimeout: 180000,
+};
+
 
             if (USE_PERSISTENT_PROFILE) {
                 launchOptions.userDataDir = resolvedPersistentDir;
