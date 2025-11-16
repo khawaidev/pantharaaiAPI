@@ -60,28 +60,32 @@ const getChromeExecutablePath = () => {
 };
 
 
+
+
 const app = express();
 
 // CORS support for Render hosting (allows frontend to be hosted separately if needed)
 app.use((req, res, next) => {
-    // Allow requests from any origin (for Render hosting flexibility)
-    // In production, you may want to restrict this to specific domains
-    const origin = req.headers.origin;
-    if (origin) {
-        res.setHeader('Access-Control-Allow-Origin', origin);
-    } else {
-        res.setHeader('Access-Control-Allow-Origin', '*');
+    const origin = req.headers.origin || "*";
+
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Access-Control-Allow-Credentials", "true");
+    res.setHeader(
+        "Access-Control-Allow-Headers",
+        "Origin, X-Requested-With, Content-Type, Accept, Authorization"
+    );
+    res.setHeader(
+        "Access-Control-Allow-Methods",
+        "GET, POST, PUT, DELETE, OPTIONS"
+    );
+
+    if (req.method === "OPTIONS") {
+        return res.status(200).end();
     }
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-    
-    // Handle preflight requests
-    if (req.method === 'OPTIONS') {
-        return res.sendStatus(200);
-    }
+
     next();
 });
+
 
 app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, 'public')));
