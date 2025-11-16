@@ -12,6 +12,7 @@ import path, { dirname } from 'path';
 import puppeteerExtra from 'puppeteer-extra';
 import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import { fileURLToPath } from 'url';
+import { chromium } from "playwright";
 
 // Use puppeteer-extra (it will automatically use puppeteer-core since puppeteer is not installed)
 const puppeteer = puppeteerExtra;
@@ -44,13 +45,13 @@ if (USE_PERSISTENT_PROFILE) {
     console.log(`[Persistent Profile] Using Chrome profile at: ${resolvedPersistentDir}`);
 }
 
-import { chromium } from "playwright";
+
 
 // Always use Playwright Chromium on Render
 const getChromeExecutablePath = () => {
     try {
         const pwPath = chromium.executablePath();
-        console.log("Using Playwright Chromium:", pwPath);
+        console.log("Playwright Chromium →", pwPath);
         return pwPath;
     } catch (err) {
         console.log("Failed to get Playwright Chromium path:", err.message);
