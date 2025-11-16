@@ -797,19 +797,20 @@ const initializeBrowser = async () => {
             let page;
 
             if (USE_PERSISTENT_PROFILE) {
-                context = browser.defaultBrowserContext();
-                try {
-                    await context.overridePermissions('https://lmarena.ai', ['notifications']);
-                } catch (permErr) {
-                    console.log('Warning: Could not override permissions on default context:', permErr.message);
-                }
-                const existingPages = await browser.pages();
-                page = existingPages.length ? existingPages[0] : await browser.newPage();
-            } else {
-                context = await browser.createIncognitoBrowserContext();
-                await context.overridePermissions('https://lmarena.ai', ['notifications']);
-                page = await context.newPage();
-            }
+    context = browser.defaultBrowserContext();
+    try {
+        await context.overridePermissions('https://lmarena.ai', ['notifications']);
+    } catch (e) {}
+    const existingPages = await browser.pages();
+    page = existingPages.length ? existingPages[0] : await browser.newPage();
+} else {
+    context = await browser.createBrowserContext(); // NEW API
+    try {
+        await context.overridePermissions('https://lmarena.ai', ['notifications']);
+    } catch (e) {}
+    page = await context.newPage();
+}
+
 
             await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36');
             await page.setExtraHTTPHeaders({
