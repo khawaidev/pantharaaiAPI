@@ -1,5 +1,6 @@
 
 
+
 // server-session.js - Use saved session to send messages
 import bodyParser from 'body-parser';
 import crypto from 'crypto';
@@ -312,31 +313,78 @@ let initializationPromise = null;
 // Helper functions
 const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-const getLatestAIResponse = async (page) => {
+// 🔥 PART 1 — Extract ALL messages (text only)
+const getAllMessages = async (page) => {
     try {
-        return await page.evaluate(() => {
-            const blocks = document.querySelectorAll('ol > div.bg-surface-primary');
-            if (!blocks.length) return null;
-            const newest = blocks[blocks.length - 1];
-            const prose = newest.querySelector('div.prose.prose-sm');
-            if (!prose) return null;
-            return (prose.innerText || prose.textContent || '').trim();
+        const messages = await page.evaluate(() => {
+            return [...document.querySelectorAll("ol div.prose.prose-sm")].map(el =>
+                (el.innerText || "").trim()
+            );
         });
+        return messages;
     } catch (error) {
-        console.log('Error getting latest AI response:', error.message);
-        return null;
+        console.log('Error getting all messages:', error.message);
+        return [];
     }
 };
 
-const isStreamingResponse = async (page) => {
+// 🔥 PART 2 — Get latest AI response
+// Latest AI response = last index that belongs to AI (odd indices: 1, 3, 5, ...)
+const getLatestAI = (messages) => {
+    // Scan from bottom upward
+    for (let i = messages.length - 1; i >= 0; i--) {
+        if (i % 2 === 1) {
+            return messages[i];
+        }
+    }
+    return null;
+};
+
+// 🔥 PART 3 — Get nth AI response
+// Using the formula: aiIndex = (2 * n) - 1
+const getNthAI = (messages, n) => {
+    const index = (2 * n) - 1;
+    if (index < 0 || index >= messages.length) return null;
+    return messages[index];
+};
+
+// 🔥 PART 4 — Detect streaming state
+const isStreaming = async (page) => {
     try {
-        return await page.evaluate(() => {
-            return !!document.querySelector('.cursor-blink, [data-state="streaming"]');
-        });
+        return await page.evaluate(() =>
+            !!document.querySelector(".cursor-blink, [data-state='streaming']")
+        );
     } catch (error) {
         console.log('Error detecting streaming state:', error.message);
         return false;
     }
+};
+
+// 🔥 PART 5 — Wait for the AI response to finish streaming
+const waitForResponseStable = async (page, timeout = 60000) => {
+    const start = Date.now();
+    let last = "";
+    let stableCount = 0;
+
+    while (Date.now() - start < timeout) {
+        const messages = await getAllMessages(page);
+        const latestAI = getLatestAI(messages);
+        const streaming = await isStreaming(page);
+
+        if (latestAI && !streaming) {
+            if (latestAI === last) {
+                stableCount++;
+                if (stableCount >= 2) return messages;
+            } else {
+                last = latestAI;
+                stableCount = 1;
+            }
+        }
+
+        await wait(500);
+    }
+
+    return await getAllMessages(page);
 };
 
 const tryQuerySelector = async (page, selector, options = {}) => {
@@ -1502,85 +1550,34 @@ app.post('/chat', async (req, res) => {
         
         await wait(2000);
 
-        // Step 5: Wait for response with DOM-native detector
+        // Step 5: Wait for AI response (stable) - using new message retrieval system
         await checkSecurityVerification(mainPage);
-        console.log('Waiting for response (using LM Arena detector)...');
+        console.log('Waiting for AI response...');
         
-        const sentMessageText = message.trim().toLowerCase();
-        const baselineResponse = await getLatestAIResponse(mainPage);
-        if (baselineResponse) {
-            console.log(`Baseline latest AI response: ${baselineResponse.substring(0, 100)}...`);
-        } else {
-            console.log('No existing AI response detected in baseline.');
+        // Wait for response to stabilize (5 minutes timeout)
+        const messages = await waitForResponseStable(mainPage, 300000);
+        const latest = getLatestAI(messages);
+        
+        // Calculate which AI response this is (for additional data)
+        // Total messages after AI responds, user messages = Math.ceil((messages.length + 1) / 2)
+        const userMessageCount = Math.ceil((messages.length + 1) / 2);
+        const nth = getNthAI(messages, userMessageCount);
+        
+        if (!latest || latest.length < 5) {
+            throw new Error('Timed out waiting for response or response too short');
         }
         
-        const maxWaitTime = 300000; // 5 minutes
-        const pollInterval = 750;
-        const startTime = Date.now();
-        let latestResponse = null;
-        let lastObservedText = baselineResponse || '';
-        let stableCount = 0;
+        console.log('Response received, length:', latest.length);
+        console.log(`Total messages: ${messages.length}, Latest AI response captured`);
         
-        while (Date.now() - startTime < maxWaitTime) {
-            // Periodically ensure no security verification is blocking
-            if (Math.random() < 0.1) {
-                await checkSecurityVerification(mainPage).catch(() => {});
-            }
-            
-            const [currentResponse, streaming] = await Promise.all([
-                getLatestAIResponse(mainPage),
-                isStreamingResponse(mainPage)
-            ]);
-            
-            if (currentResponse && currentResponse.length > 0) {
-                const lowerCurrent = currentResponse.toLowerCase();
-                
-                const matchesBaseline = baselineResponse && currentResponse === baselineResponse;
-                const matchesSent = sentMessageText && lowerCurrent.includes(sentMessageText.substring(0, Math.min(30, sentMessageText.length)));
-                
-                if (!matchesBaseline && !matchesSent) {
-                    if (!streaming) {
-                        if (currentResponse === lastObservedText) {
-                            stableCount += 1;
-                        } else {
-                            lastObservedText = currentResponse;
-                            stableCount = 1;
-                        }
-                        
-                        if (stableCount >= 2) {
-                            latestResponse = currentResponse;
-                            console.log('AI response stabilized, capturing result.');
-                            break;
-                        }
-                    } else {
-                        lastObservedText = currentResponse;
-                        stableCount = 1;
-                        console.log('AI is still streaming...');
-                    }
-                } else {
-                    if (matchesBaseline) {
-                        console.log('Current response matches baseline, waiting for new content...');
-                    } else {
-                        console.log('Detected content similar to sent message, ignoring...');
-                    }
-                }
-            } else {
-                console.log('No AI response detected yet, waiting...');
-            }
-            
-            await wait(pollInterval);
-        }
-        
-        if (!latestResponse) {
-            latestResponse = lastObservedText;
-        }
-        
-        if (!latestResponse || latestResponse.length < 5) {
-            throw new Error('Timed out waiting for response');
-        }
-        
-        console.log('Response received, length:', latestResponse.length);
-        res.json({ response: latestResponse });
+        // Return response in the format expected by frontend (backward compatible)
+        res.json({ 
+            response: latest,
+            // Additional data for debugging/advanced use
+            latest_response: latest,
+            nth_response: nth,
+            total_messages: messages.length
+        });
 
     } catch (error) {
         console.error('Error in chat endpoint:', error);
