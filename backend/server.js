@@ -1,5 +1,7 @@
 
 
+
+
 // server-session.js - Use saved session to send messages
 import bodyParser from 'body-parser';
 import crypto from 'crypto';
@@ -108,6 +110,32 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Serve the frontend at root
 app.get('/', (_req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// Diagnostic endpoint to find Chrome path (useful for Render setup)
+app.get('/diagnose-chrome', (_req, res) => {
+    const results = {
+        chromeExecutablePath: getChromeExecutablePath(),
+        environmentVariables: {
+            CHROME_EXECUTABLE_PATH: process.env.CHROME_EXECUTABLE_PATH || 'not set',
+            CHROME_PATH: process.env.CHROME_PATH || 'not set',
+            GOOGLE_CHROME_SHIM: process.env.GOOGLE_CHROME_SHIM || 'not set',
+            PATH: process.env.PATH || 'not set'
+        },
+        commonPaths: [
+            '/usr/bin/google-chrome',
+            '/usr/bin/chromium',
+            '/usr/bin/chromium-browser',
+            '/usr/bin/google-chrome-stable',
+            '/snap/bin/chromium'
+        ].map(p => ({
+            path: p,
+            exists: fs.existsSync(p)
+        })),
+        recommendation: 'Set CHROME_EXECUTABLE_PATH environment variable in Render dashboard to the path shown above'
+    };
+    
+    res.json(results);
 });
 
 // Endpoint to download the session.json file
