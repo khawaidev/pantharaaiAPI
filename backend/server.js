@@ -728,7 +728,6 @@ const initializeBrowser = async () => {
                 '--disable-blink-features=AutomationControlled',
                 '--window-size=1280,900',
                 '--disable-web-security',
-                '--disable-features=IsolateOrigins,site-per-process',
                 '--disable-dev-shm-usage',
                 '--disable-accelerated-2d-canvas',
                 '--no-first-run',
@@ -753,9 +752,6 @@ const initializeBrowser = async () => {
                 '--no-default-browser-check',
                 '--no-pings',
                 '--password-store=basic',
-                '--use-gl=swiftshader',
-                '--disable-extensions-except',
-                '--disable-extensions',
                 '--disable-plugins-discovery',
                 '--disable-preconnect',
                 '--disable-sync',
@@ -764,27 +760,40 @@ const initializeBrowser = async () => {
                 '--disable-component-extensions-with-background-pages'
             ];
             
+
             const launchOptions = {
-    headless: true, // REQUIRED ON RENDER
-    executablePath: executablePath || undefined,
-    args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-gpu',
-        '--disable-dev-shm-usage',
-        '--disable-accelerated-2d-canvas',
-        '--no-first-run',
-        '--no-zygote',
-        '--single-process',
-        '--disable-infobars',
-        '--disable-notifications',
-        '--window-size=1280,900',
-        '--disable-web-security'
-    ],
-    ignoreHTTPSErrors: true,
-    ignoreDefaultArgs: ['--enable-automation'],
-    protocolTimeout: 180000,
+  headless: true,
+  executablePath: executablePath,
+  args: [
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--disable-dev-shm-usage",
+      "--disable-gpu",
+      "--no-zygote",
+      "--no-first-run",
+      "--no-default-browser-check",
+      "--disable-background-networking",
+      "--disable-background-timer-throttling",
+      "--disable-breakpad",
+      "--disable-client-side-phishing-detection",
+      "--disable-component-extensions-with-background-pages",
+      "--disable-hang-monitor",
+      "--disable-ipc-flooding-protection",
+      "--disable-popup-blocking",
+      "--disable-prompt-on-repost",
+      "--disable-renderer-backgrounding",
+      "--disable-sync",
+      "--hide-scrollbars",
+      "--metrics-recording-only",
+      "--mute-audio",
+      "--no-sandbox",
+      "--window-size=1280,900"
+  ],
+  ignoreHTTPSErrors: true,
+  ignoreDefaultArgs: ["--enable-automation"],
+  protocolTimeout: 180000
 };
+
 
 
             if (USE_PERSISTENT_PROFILE) {
@@ -793,22 +802,25 @@ const initializeBrowser = async () => {
 
             const browser = await puppeteer.launch(launchOptions);
 
-            let context;
-            let page;
+            await new Promise(r => setTimeout(r, 500));
 
-            if (USE_PERSISTENT_PROFILE) {
+
+            // Stable page creation for Puppeteer v22 + Playwright Chromium
+let page;
+let context;
+
+if (USE_PERSISTENT_PROFILE) {
     context = browser.defaultBrowserContext();
     try {
         await context.overridePermissions('https://lmarena.ai', ['notifications']);
     } catch (e) {}
-    const existingPages = await browser.pages();
-    page = existingPages.length ? existingPages[0] : await browser.newPage();
+
+    const pages = await browser.pages();
+    page = pages.length ? pages[0] : await browser.newPage();
 } else {
-    context = await browser.createBrowserContext(); // NEW API
-    try {
-        await context.overridePermissions('https://lmarena.ai', ['notifications']);
-    } catch (e) {}
-    page = await context.newPage();
+    // No custom contexts — NOT supported on Playwright Chromium inside Puppeteer-core
+    page = await browser.newPage();
+    context = page.browserContext();
 }
 
 
